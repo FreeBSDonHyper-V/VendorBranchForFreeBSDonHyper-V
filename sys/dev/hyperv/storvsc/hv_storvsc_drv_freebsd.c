@@ -1326,9 +1326,10 @@ create_storvsc_request(union ccb *ccb, struct hv_storvsc_request *reqp)
 	reqp->sense_info_len = csio->sense_len;
 
 	reqp->ccb = ccb;
+	/*
 	KASSERT((ccb->ccb_h.flags & CAM_SCATTER_VALID) == 0,
 			("ccb is scatter gather valid\n"));
-
+	*/
 	if (csio->dxfer_len != 0) {
 		reqp->data_buf.length = csio->dxfer_len;
 		bytes_to_copy = csio->dxfer_len;
