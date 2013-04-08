@@ -1,8 +1,0 @@
-# $FreeBSD$
-#
-include	GENERIC
-ident		HYPERV
-
-# Hyper-V VM support
-options 	HYPERV
-
