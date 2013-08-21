@@ -68,6 +68,12 @@ typedef struct hv_vmbus_service {
         void			(*callback)(void *);
 } hv_vmbus_service;
 
+/* Time Sync data */
+typedef struct {
+	uint64_t data;
+} time_sync_data;
+
+
 static void hv_shutdown_cb(void *context);
 static void hv_heartbeat_cb(void *context);
 static void hv_timesync_cb(void *context);
@@ -175,7 +181,8 @@ static void hv_kvp_cb(void *context)
 static void
 hv_set_host_time(void *context)
 {
-	uint64_t	hosttime = (uint64_t)context;
+ 	time_sync_data* time_msg = (time_sync_data*) context;	
+	uint64_t	hosttime = time_msg->data;
 	struct timespec	ts, host_ts;
 	int64_t		tns, host_tns, tmp, tsec;
 
@@ -193,6 +200,9 @@ hv_set_host_time(void *context)
 	tc_setclock(&host_ts);
 	resettodr();
 	mtx_unlock(&Giant);
+
+	/* Free the hosttime that was allocated in hv_adj_guesttime() */	
+	free(time_msg, M_DEVBUF);
 }
 
 /**
@@ -210,17 +220,28 @@ static inline
 void hv_adj_guesttime(uint64_t hosttime, uint8_t flags)
 {
 	static int scnt = 50;
+	time_sync_data* time_msg;
 
+	time_msg = malloc(sizeof(time_sync_data), M_DEVBUF, M_NOWAIT);
+
+	if(time_msg == NULL)
+	   return;
+	
+	time_msg->data = hosttime;
+
+		
 	if ((flags & HV_ICTIMESYNCFLAG_SYNC) != 0) {
 	    hv_queue_work_item(service_table[HV_TIME_SYNCH].work_queue,
-		hv_set_host_time, (void *) hosttime);
-	    return;
+		hv_set_host_time, time_msg);
 	}
-
-	if ((flags & HV_ICTIMESYNCFLAG_SAMPLE) != 0 && scnt > 0) {
+	else if ((flags & HV_ICTIMESYNCFLAG_SAMPLE) != 0 && scnt > 0) {
 	    scnt--;
 	    hv_queue_work_item(service_table[HV_TIME_SYNCH].work_queue,
-		hv_set_host_time, (void *) hosttime);
+		hv_set_host_time, time_msg);
+	}
+	else {
+
+	    free(time_msg, M_DEVBUF);
 	}
 }
 
