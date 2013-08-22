@@ -37,7 +37,7 @@
 #include <sys/module.h>
 #include <sys/reboot.h>
 #include <sys/timetc.h>
-
+#include <sys/syscallsubr.h>
 #include <dev/hyperv/include/hyperv.h>
 
 #define HV_SHUT_DOWN		0
@@ -52,6 +52,7 @@
 #define HV_ICTIMESYNCFLAG_PROBE		0
 #define HV_ICTIMESYNCFLAG_SYNC		1
 #define HV_ICTIMESYNCFLAG_SAMPLE	2
+#define HV_NANO_SEC_PER_SEC 1000000000
 
 typedef struct hv_vmbus_service {
 	hv_guid			guid;		/* Hyper-V GUID		*/
@@ -183,23 +184,24 @@ hv_set_host_time(void *context)
 {
  	time_sync_data* time_msg = (time_sync_data*) context;	
 	uint64_t	hosttime = time_msg->data;
-	struct timespec	ts, host_ts;
-	int64_t		tns, host_tns, tmp, tsec;
+	struct timespec	guest_ts, host_ts;
+	uint64_t	host_tns;
+	int64_t		diff;
+	int error;
 
-	nanotime(&ts);
-	tns = ts.tv_sec * HV_NANO_SEC + ts.tv_nsec;
 	host_tns = (hosttime - HV_WLTIMEDELTA) * 100;
+	host_ts.tv_sec = (time_t)(host_tns/HV_NANO_SEC_PER_SEC);
+	host_ts.tv_nsec = (long)(host_tns%HV_NANO_SEC_PER_SEC);
 
-	tmp = host_tns;
-	tsec = tmp / HV_NANO_SEC;
-	host_ts.tv_nsec = (long) (tmp - (tsec * HV_NANO_SEC));
-	host_ts.tv_sec = tsec;
-
-	/* force time sync with host after reboot, restore, etc. */
-	mtx_lock(&Giant);
-	tc_setclock(&host_ts);
-	resettodr();
-	mtx_unlock(&Giant);
+	nanotime(&guest_ts);
+	
+	diff = (int64_t)host_ts.tv_sec - (int64_t)guest_ts.tv_sec;
+	
+	// If host differs by 5 seconds then make the guest catch up
+	if (diff > 5 || diff < -5) {
+	
+		error = kern_clock_settime( curthread, CLOCK_REALTIME, &host_ts );
+	} 
 
 	/* Free the hosttime that was allocated in hv_adj_guesttime() */	
 	free(time_msg, M_DEVBUF);
