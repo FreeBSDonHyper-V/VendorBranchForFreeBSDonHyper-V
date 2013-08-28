@@ -41,7 +41,7 @@
 #include <sys/lock.h>
 #include <sys/sx.h>
 
-#include <dev/hyperv/include/hyperv.h>
+#include <hyperv.h>
 
 
 #define NVSP_INVALID_PROTOCOL_VERSION           (0xFFFFFFFF)

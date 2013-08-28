@@ -65,7 +65,7 @@
 #include <cam/scsi/scsi_message.h>
 
 
-#include <dev/hyperv/include/hyperv.h>
+#include <hyperv.h>
 #include "hv_vstorage.h"
 
 #define STORVSC_RINGBUFFER_SIZE		(20*PAGE_SIZE)

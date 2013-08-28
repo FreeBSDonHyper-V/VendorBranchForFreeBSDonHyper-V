@@ -41,7 +41,7 @@
 #include <machine/bus.h>
 #include <machine/atomic.h>
 
-#include <dev/hyperv/include/hyperv.h>
+#include <hyperv.h>
 #include "hv_net_vsc.h"
 #include "hv_rndis.h"
 #include "hv_rndis_filter.h"

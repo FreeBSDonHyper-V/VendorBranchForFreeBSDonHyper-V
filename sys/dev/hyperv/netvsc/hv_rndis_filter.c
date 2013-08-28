@@ -40,7 +40,7 @@
 #include <vm/vm_param.h>
 #include <vm/pmap.h>
 
-#include <dev/hyperv/include/hyperv.h>
+#include <hyperv.h>
 #include "hv_net_vsc.h"
 #include "hv_rndis.h"
 #include "hv_rndis_filter.h"

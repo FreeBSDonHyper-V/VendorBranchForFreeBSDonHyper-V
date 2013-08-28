@@ -34,7 +34,7 @@
 #include <sys/mutex.h>
 #include <sys/sema.h>
 
-#include <dev/hyperv/include/hyperv.h>
+#include <hyperv.h>
 
 
 /*
