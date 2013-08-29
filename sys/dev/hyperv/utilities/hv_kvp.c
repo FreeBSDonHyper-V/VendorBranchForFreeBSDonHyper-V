@@ -184,8 +184,6 @@ hv_kvp_negotiate_version(
 {
         int icframe_vercnt;
         int icmsg_vercnt;
-        int i;
-	#define MAX_SRV_VER 0x7fff
 
 	 printf("hv_kvp_negotiate_version\n");
         icmsghdrp->icmsgsize = 0x10;
@@ -201,16 +199,23 @@ hv_kvp_negotiate_version(
         // support.
         //
 
-        for (i = 0; i < negop->icframe_vercnt; i++) {
-                if (negop->icversion_data[i].major <= MAX_SRV_VER)
-                        icframe_vercnt = negop->icversion_data[i].major;
-        }
-
-        for (i = negop->icframe_vercnt;
-                 (i < negop->icframe_vercnt + negop->icmsg_vercnt); i++) {
-                if (negop->icversion_data[i].major <= MAX_SRV_VER)
-                        icmsg_vercnt = negop->icversion_data[i].major;
-        }
+	 if ((icframe_vercnt >= 2) && (negop->icversion_data[1].major == 3))
+	 {
+		icframe_vercnt = 3;
+	 	if (icmsg_vercnt >=2)
+		{
+			icmsg_vercnt = 4;
+		}
+		else
+		{
+			icmsg_vercnt = 3;
+		}
+	 }
+	 else 
+	 {
+		icframe_vercnt = 1;
+		icmsg_vercnt = 1; 			
+	 }
 
         //
         // Respond with the maximum framework and service

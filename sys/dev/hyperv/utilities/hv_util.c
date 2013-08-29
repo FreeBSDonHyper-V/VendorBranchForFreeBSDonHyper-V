@@ -121,14 +121,14 @@ hv_negotiate_version(
 	struct hv_vmbus_icmsg_hdr*		icmsghdrp,
 	struct hv_vmbus_icmsg_negotiate*	negop,
 	uint8_t*				buf)
-    {
+{
 	icmsghdrp->icmsgsize = 0x10;
 
 	negop = (struct hv_vmbus_icmsg_negotiate *)&buf[
 		sizeof(struct hv_vmbus_pipe_hdr) +
 		sizeof(struct hv_vmbus_icmsg_hdr)];
 
-	if (negop->icframe_vercnt == 2 &&
+	if (negop->icframe_vercnt >= 2 &&
 	    negop->icversion_data[1].major == 3) {
 		negop->icversion_data[0].major = 3;
 		negop->icversion_data[0].minor = 0;
