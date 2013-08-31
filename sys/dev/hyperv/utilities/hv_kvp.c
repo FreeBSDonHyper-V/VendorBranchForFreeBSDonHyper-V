@@ -310,7 +310,7 @@ kvp_rcv_user(void)
 {
 	int rcv_fd, rcv_error=0;
 	struct uio rcv_uio;
-        struct iovec rcv_iovec;
+       struct iovec rcv_iovec;
 	struct thread *thread_ptr = curthread;
 
 	rcv_fd = sock_fd;
@@ -325,7 +325,7 @@ kvp_rcv_user(void)
        rcv_uio.uio_segflg = UIO_SYSSPACE;
 
 	/* Block read */
-        rcv_error = kern_readv(thread_ptr, rcv_fd, &rcv_uio);
+       rcv_error = kern_readv(thread_ptr, rcv_fd, &rcv_uio);
 
 	return (rcv_error);
 }
@@ -539,14 +539,14 @@ static int
 ipinfo_utf16_utf8(struct hv_kvp_ip_msg *host_ip_msg, hv_kvp_bsd_msg *umsg)
 {
        int err_ip, err_subnet, err_gway, err_dns, err_adap;
-	int unit = 0, j;
+	int j;
  	struct hv_device *hv_dev;	/* GUID Data Structure */
-     	hn_softc_t *sc;			/* hn softc structure  */ 
+     	hn_softc_t *sc;		/* hn softc structure  */ 
 	char if_name[4];
 	/* Global Variable to hold GUID Value */
-	unsigned char guid_instance[32];
+	unsigned char guid_instance[40];
 	char* guid_data = NULL;
-	char buf[37];			 
+	char buf[39];			 
 	int len=16;
 	struct guid_extract {
         	char a1[2];
@@ -561,42 +561,67 @@ ipinfo_utf16_utf8(struct hv_kvp_ip_msg *host_ip_msg, hv_kvp_bsd_msg *umsg)
         	char e[12];
 	};
 	struct guid_extract *id;
-	/* Trying to find GUID of Network Device */
-     	sc = devclass_get_softc(devclass_find("hn"), unit);
-     	hv_dev = sc->hn_dev_obj;
-     	for (j = 0; j < 16 ; j++) {
-           sprintf(&guid_instance[j * 2], "%02x",
-               hv_dev->device_id.data[j]);
-     	}
-	guid_data =(char *) guid_instance;
-	id = (struct guid_extract *)guid_data;
-	snprintf(buf, sizeof(buf) ,"%.2s%.2s%.2s%.2s-%.2s%.2s-%.2s%.2s-%.4s-%s",
-        	id->a4,id->a3,id->a2,id->a1,
-        	id->b2, id->b1, id->c2, id->c1,id->d,id->e);
-	guid_data = NULL;
-	sprintf(if_name,"%s%d","hn",unit);
-	
+	device_t *devs;
+	int devcnt;
+
 	/* IP Address */
-    	len = convert16_to_8((char *)umsg->body.kvp_ip_val.ip_addr, 
-						MAX_IP_ADDR_SIZE,
-                        (uint16_t *)host_ip_msg->kvp_ip_val.ip_addr,
-                        MAX_IP_ADDR_SIZE,  &err_ip);
+	len = convert16_to_8((char *)umsg->body.kvp_ip_val.ip_addr, 
+				MAX_IP_ADDR_SIZE,
+     		             (uint16_t *)host_ip_msg->kvp_ip_val.ip_addr,
+	                     MAX_IP_ADDR_SIZE,  &err_ip);
+
 	/* Adapter ID : GUID */
 	len = convert16_to_8((char *)umsg->body.kvp_ip_val.adapter_id,
-                        MAX_ADAPTER_ID_SIZE,
-                        (uint16_t *)host_ip_msg->kvp_ip_val.adapter_id,
+            	          MAX_ADAPTER_ID_SIZE,
+                    	   (uint16_t *)host_ip_msg->kvp_ip_val.adapter_id,
                         MAX_ADAPTER_ID_SIZE,  &err_adap);
-	/* Need to implement multiple network adapter handler */
-	if (strncmp(buf,(char *)umsg->body.kvp_ip_val.adapter_id,36) == 0)
+
+	if (devclass_get_devices(devclass_find("hn"), &devs, &devcnt) == 0)
 	{
-		/* Pass inteface Name */
-		strcpy((char *)umsg->body.kvp_ip_val.adapter_id,if_name);
+		for (devcnt = devcnt - 1; devcnt >= 0; devcnt--)
+		{
+			sc = device_get_softc( devs[devcnt] );
+	
+			/* Trying to find GUID of Network Device */
+ 	    		hv_dev = sc->hn_dev_obj;
+
+			for (j = 0; j < 16 ; j++) {
+	           		sprintf(&guid_instance[j * 2], "%02x",
+       		   		hv_dev->device_id.data[j]);
+			}
+
+			guid_data =(char *) guid_instance;
+			id = (struct guid_extract *)guid_data;
+			snprintf(buf, sizeof(buf) ,"{%.2s%.2s%.2s%.2s-%.2s%.2s-%.2s%.2s-%.4s-%s}",
+       	 		id->a4,id->a3,id->a2,id->a1,
+	        		id->b2, id->b1, id->c2, id->c1,id->d,id->e);
+			guid_data = NULL;
+			sprintf(if_name,"%s%d","hn",device_get_unit(devs[devcnt]));
+
+			/*printf(
+				"Comparing devname %s, buf %s to adapter id %s\n",
+				if_name,
+				buf,
+				(char*)umsg->body.kvp_ip_val.adapter_id
+				);*/
+
+			/* Need to implement multiple network adapter handler */
+			if (strncmp(buf,(char *)umsg->body.kvp_ip_val.adapter_id,39) == 0)
+			{
+				/* Pass inteface Name */
+				strcpy((char *)umsg->body.kvp_ip_val.adapter_id,if_name);
+				break;
+			}
+			else
+			{
+				//printf("GUID Not Found\n");
+				/* Implement safe exit */
+			}
+		}
+
+		free( devs, M_TEMP );
 	}
-	else
-	{
-		printf("GUID Not Found\n");
-		/* Implement safe exit */
-	}
+
 	/* Address Family , DHCP , SUBNET, Gateway, DNS */ 
 	umsg->kvp_hdr.operation = host_ip_msg->operation;
 	umsg->body.kvp_ip_val.addr_family = host_ip_msg->kvp_ip_val.addr_family;
@@ -799,9 +824,9 @@ static void
 kvp_respond_host(int error)
 {
 	struct hv_vmbus_icmsg_hdr *hv_icmsg_hdrp;
-
 	if (!hv_kvp_transaction_active()) {
 
+		//TODO: Triage why we are here.
 		//printf("No active transaction returning\n");
 		goto Finish;
 	}
@@ -827,6 +852,7 @@ kvp_respond_host(int error)
 	kvp_msg_state.in_progress = FALSE;
 
 Finish:
+
 	return;
 }
 
