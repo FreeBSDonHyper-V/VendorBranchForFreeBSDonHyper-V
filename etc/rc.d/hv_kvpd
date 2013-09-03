@@ -8,7 +8,7 @@
 . /etc/rc.subr
 
 name="hv_kvp_daemon"
-rcvar=`set_rcvar`
+rcvar=`hv_kvp_daemon`
 command="/usr/sbin/${name}"
 sysctl dev.hv_kvp_daemon_ack=1
 required_dirs="/etc/hyperv"
