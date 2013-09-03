@@ -39,46 +39,16 @@
 #include <sys/timetc.h>
 #include <sys/syscallsubr.h>
 #include <hyperv.h>
-
-#define HV_SHUT_DOWN		0
-#define HV_TIME_SYNCH		1
-#define HV_HEART_BEAT		2
-#define HV_KVP			3
-#define HV_MAX_UTIL_SERVICES	4
-
-#define HV_NANO_SEC	1000000000L	/* 10^ 9 nanosecs = 1 sec */
-
-#define HV_WLTIMEDELTA			116444736000000000L /* in 100ns unit */
-#define HV_ICTIMESYNCFLAG_PROBE		0
-#define HV_ICTIMESYNCFLAG_SYNC		1
-#define HV_ICTIMESYNCFLAG_SAMPLE	2
-#define HV_NANO_SEC_PER_SEC 1000000000
-
-typedef struct hv_vmbus_service {
-	hv_guid			guid;		/* Hyper-V GUID		*/
-        char*			name;		/* name of service	*/
-        boolean_t		enabled;	/* service enabled	*/
-        hv_work_queue*		work_queue;	/* background work queue */
-				/*
-				 * function to initialize service
-				 */
-        int			(*init)(struct hv_vmbus_service *);
-				/*
-				 * function to process Hyper-V messages
-				 */
-        void			(*callback)(void *);
-} hv_vmbus_service;
+#include "hv_kvp.h"
 
 /* Time Sync data */
 typedef struct {
 	uint64_t data;
 } time_sync_data;
 
-
 static void hv_shutdown_cb(void *context);
 static void hv_heartbeat_cb(void *context);
 static void hv_timesync_cb(void *context);
-static void hv_kvp_cb(void *context);
 
 static int hv_timesync_init(hv_vmbus_service *serv);
 
@@ -86,7 +56,7 @@ static int hv_timesync_init(hv_vmbus_service *serv);
  * Note: GUID codes below are predefined by the host hypervisor
  * (Hyper-V and Azure)interface and required for correct operation.
  */
-static hv_vmbus_service service_table[] = {
+hv_vmbus_service service_table[] = {
 	/* Shutdown Service */
 	{ .guid.data = {0x31, 0x60, 0x0B, 0X0E, 0x13, 0x52, 0x34, 0x49,
 			0x81, 0x8B, 0x38, 0XD9, 0x0C, 0xED, 0x39, 0xDB},
@@ -109,7 +79,7 @@ static hv_vmbus_service service_table[] = {
 			0xab, 0x55, 0x38, 0x2f, 0x3b, 0xd5, 0x42, 0x2d},
 	  .name = "Hyper-V Heartbeat Service\n",
 	  .enabled = TRUE,
-          .callback = hv_heartbeat_cb,
+         .callback = hv_heartbeat_cb,
 
 	},
 
@@ -117,22 +87,25 @@ static hv_vmbus_service service_table[] = {
         { .guid.data = {0xe7, 0xf4, 0xa0, 0xa9, 0x45, 0x5a, 0x96, 0x4d,
 			0xb8, 0x27, 0x8a, 0x84, 0x1e, 0x8c, 0x3,  0xe6},
 	  .name = "Hyper-V KVP Service\n",
-	  .enabled = FALSE,
-	  .callback = hv_kvp_cb,
+	  .enabled = TRUE,
+	  .init = hv_kvp_init, 
+	  .callback = hv_kvp_callback,
 	},
 };
 
-/**
- * Receive buffer pointers, there is one buffer per utility service. The
- * buffer is allocated during attach().
- */
-static uint8_t* receive_buffer[HV_MAX_UTIL_SERVICES];
+
+// 
+// Receive buffer pointers, there is one buffer per utility service. The
+// buffer is allocated during attach().
+//
+
+uint8_t* receive_buffer[HV_MAX_UTIL_SERVICES];
 
 struct hv_ictimesync_data {
 	uint64_t    parenttime;
 	uint64_t    childtime;
 	uint64_t    roundtriptime;
-        uint8_t	    flags;
+       uint8_t     flags;
 } __packed;
 
 static int hv_timesync_init(hv_vmbus_service *serv)
@@ -148,14 +121,14 @@ hv_negotiate_version(
 	struct hv_vmbus_icmsg_hdr*		icmsghdrp,
 	struct hv_vmbus_icmsg_negotiate*	negop,
 	uint8_t*				buf)
-    {
+{
 	icmsghdrp->icmsgsize = 0x10;
 
 	negop = (struct hv_vmbus_icmsg_negotiate *)&buf[
 		sizeof(struct hv_vmbus_pipe_hdr) +
 		sizeof(struct hv_vmbus_icmsg_hdr)];
 
-	if (negop->icframe_vercnt == 2 &&
+	if (negop->icframe_vercnt >= 2 &&
 	    negop->icversion_data[1].major == 3) {
 		negop->icversion_data[0].major = 3;
 		negop->icversion_data[0].minor = 0;
@@ -172,9 +145,6 @@ hv_negotiate_version(
 	negop->icmsg_vercnt = 1;
 }
 
-static void hv_kvp_cb(void *context)
-{
-}
 
 /**
  * Set host time based on time sync message from host
@@ -183,10 +153,10 @@ static void
 hv_set_host_time(void *context)
 {
  	time_sync_data* time_msg = (time_sync_data*) context;	
-	uint64_t	hosttime = time_msg->data;
-	struct timespec	guest_ts, host_ts;
-	uint64_t	host_tns;
-	int64_t		diff;
+	uint64_t hosttime = time_msg->data;
+	struct timespec guest_ts, host_ts;
+	uint64_t host_tns;
+	int64_t diff;
 	int error;
 
 	host_tns = (hosttime - HV_WLTIMEDELTA) * 100;
@@ -296,7 +266,7 @@ hv_shutdown_cb(void *context)
 {
 	uint8_t*			buf;
 	hv_vmbus_channel*		channel = context;
-	uint8_t				execute_shutdown = 0;
+	uint8_t			execute_shutdown = 0;
 	hv_vmbus_icmsg_hdr*		icmsghdrp;
 	uint32_t			recv_len;
 	uint64_t			request_id;
@@ -428,7 +398,7 @@ hv_util_attach(device_t dev)
 	receive_buffer_offset = service - &service_table[0];
 	device_printf(dev, "Hyper-V Service attaching: %s\n", service->name);
 	receive_buffer[receive_buffer_offset] =
-		malloc(PAGE_SIZE, M_DEVBUF, M_WAITOK | M_ZERO);
+		malloc(4 * PAGE_SIZE, M_DEVBUF, M_WAITOK | M_ZERO);
 
 	if (service->init != NULL) {
 	    ret = service->init(service);
@@ -438,8 +408,8 @@ hv_util_attach(device_t dev)
 	    }
 	}
 
-	ret = hv_vmbus_channel_open(hv_dev->channel, 2 * PAGE_SIZE,
-		    2 * PAGE_SIZE, NULL, 0,
+	ret = hv_vmbus_channel_open(hv_dev->channel, 4 * PAGE_SIZE,
+		    4 * PAGE_SIZE, NULL, 0,
 		    service->callback, hv_dev->channel);
 
 	if (ret)
