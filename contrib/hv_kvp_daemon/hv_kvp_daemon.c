@@ -249,9 +249,9 @@ static int kvp_file_init(void)
 	int i;
 	int alloc_unit = sizeof(struct kvp_record) * ENTRIES_PER_BLOCK;
 
-	if (access("/etc/hyperv/pool/", F_OK)) {
-		if (mkdir("/etc/hyperv/pool/", S_IRUSR | S_IWUSR | S_IROTH)) {
-			syslog(LOG_ERR, " Failed to create /etc/hyperv/pool/");
+	if (access("/etc/hyperv/pool", F_OK)) {
+		if (mkdir("/etc/hyperv/pool", S_IRUSR | S_IWUSR | S_IROTH)) {
+			syslog(LOG_ERR, " Failed to create /etc/hyperv/pool");
 			exit(EXIT_FAILURE);
 		}
 	}
