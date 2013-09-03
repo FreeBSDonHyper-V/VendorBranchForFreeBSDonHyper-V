@@ -1,10 +1,9 @@
 #!/bin/sh
 #
-# $FreeBSD: src/etc/rc.d/inetd,v 1.6.2.1.6.1 2010/12/21 17:09:25 kensmith Exp $
+# $FreeBSD: src/etc/rc.d/hv_kvpd $
 #
 
 # PROVIDE: hv_kvpd
-# REQUIRE: DAEMON LOGIN cleanvar devfs
 
 . /etc/rc.subr
 
