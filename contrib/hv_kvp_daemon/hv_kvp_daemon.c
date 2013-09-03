@@ -260,7 +260,7 @@ static int kvp_file_init(void)
 		fname = kvp_file_info[i].fname;
 		records_read = 0;
 		num_blocks = 1;
-		sprintf(fname, "/etc/hyperv/pool//.kvp_pool_%d", i);
+		sprintf(fname, "/etc/hyperv/pool/.kvp_pool_%d", i);
 		fd = open(fname, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IROTH);
 
 		if (fd == -1)
