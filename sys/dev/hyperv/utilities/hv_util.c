@@ -166,10 +166,9 @@ hv_set_host_time(void *context)
 	nanotime(&guest_ts);
 	
 	diff = (int64_t)host_ts.tv_sec - (int64_t)guest_ts.tv_sec;
-	
+
 	// If host differs by 5 seconds then make the guest catch up
 	if (diff > 5 || diff < -5) {
-	
 		error = kern_clock_settime( curthread, CLOCK_REALTIME, &host_ts );
 	} 
 
@@ -191,7 +190,6 @@ hv_set_host_time(void *context)
 static inline
 void hv_adj_guesttime(uint64_t hosttime, uint8_t flags)
 {
-	static int scnt = 50;
 	time_sync_data* time_msg;
 
 	time_msg = malloc(sizeof(time_sync_data), M_DEVBUF, M_NOWAIT);
@@ -206,8 +204,7 @@ void hv_adj_guesttime(uint64_t hosttime, uint8_t flags)
 	    hv_queue_work_item(service_table[HV_TIME_SYNCH].work_queue,
 		hv_set_host_time, time_msg);
 	}
-	else if ((flags & HV_ICTIMESYNCFLAG_SAMPLE) != 0 && scnt > 0) {
-	    scnt--;
+	else if ((flags & HV_ICTIMESYNCFLAG_SAMPLE) != 0) {
 	    hv_queue_work_item(service_table[HV_TIME_SYNCH].work_queue,
 		hv_set_host_time, time_msg);
 	}
